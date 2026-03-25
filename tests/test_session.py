@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from agent_sandbox.config import ModalSandboxConfig
+from agent_sandbox.execution.protocol import PythonExecutionResponse
+from agent_sandbox.models import ExecutionStatus
+from agent_sandbox.session import SandboxSession
+
+from .fakes import FakeBackend, backend_result
+
+
+def test_session_lazy_starts_and_maps_python_results() -> None:
+    protocol = PythonExecutionResponse(success=True, stdout="hi\n", value_repr="42").model_dump_json()
+    backend = FakeBackend(
+        queue=[backend_result(stdout=protocol, command=("python", "-u", "-c", "runner"))]
+    )
+    session = SandboxSession(ModalSandboxConfig(), backend=backend)
+
+    result = session.run_python("print('hi')\n40 + 2")
+
+    assert backend.is_started is True
+    assert result.status is ExecutionStatus.SUCCEEDED
+    assert result.success is True
+    assert result.stdout == "hi\n"
+    assert result.value_repr == "42"
+
+
+def test_shell_non_zero_exit_is_normal_result_not_exception() -> None:
+    backend = FakeBackend(
+        queue=[backend_result(stderr="boom\n", exit_code=2, command=("/bin/bash", "-lc", "false"))]
+    )
+    session = SandboxSession(ModalSandboxConfig(), backend=backend)
+
+    result = session.run_shell("false")
+
+    assert result.status is ExecutionStatus.FAILED
+    assert result.success is False
+    assert result.error_type == "NonZeroExit"
+    assert result.exit_code == 2
