@@ -1,25 +1,60 @@
-# Repository Guidelines
+# Agent Sandbox Tool Map
 
-## Project Structure & Module Organization
-`src/agent_sandbox/` contains the library. Treat `session.py` and `tool.py` as the public API layer, `backend/` as the Modal-specific implementation boundary, and `execution/` as the protocol/bootstrap layer for Python execution. Shared types live in `config.py`, `models.py`, and `exceptions.py`. `tests/` mirrors the package structure; `tests/fakes.py` provides deterministic fake backends, and `tests/integration/test_modal_backend.py` covers real Modal behavior. Use `docs/` for architecture, module, execution-flow, and testing notes.
+Start here when you need repository context. `AGENTS.md` is a router, not the full policy manual.
 
-## Build, Test, and Development Commands
-`pip install -e .[dev]` installs the package in editable mode with Ruff, MyPy, Pytest, and pre-commit.
-`ruff check .` runs lint rules.
-`ruff format --check .` verifies formatting; use `ruff format .` before committing if needed.
-`mypy src` enforces the repo’s strict typing rules.
-`pytest -m "not integration"` runs the default fast suite with coverage enabled via `pyproject.toml`.
-`MODAL_RUN_INTEGRATION=1 pytest -m integration` runs live Modal tests; this requires `modal setup` or valid `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`.
-`pre-commit run --all-files` matches the configured local hooks.
+## Read Order
 
-## Coding Style & Naming Conventions
-Target Python 3.11+ with 4-space indentation, double quotes, and a 100-character line limit. Use `snake_case` for modules and functions, `PascalCase` for classes and enums, and `ALL_CAPS` for constants. Keep public APIs fully typed; `mypy` is configured with `disallow_untyped_defs = true`. Prefer Pydantic models for config and protocol boundaries. Keep Modal SDK details inside `backend/modal_backend.py` instead of leaking them into session or tool layers.
+1. [ARCHITECTURE.md](./ARCHITECTURE.md)
+2. [docs/PLANS.md](./docs/PLANS.md)
+3. [docs/exec-plans/index.md](./docs/exec-plans/index.md)
+4. Relevant domain docs under `docs/`
+5. Source files under `src/agent_sandbox/`
+6. Tests under `tests/`
 
-## Testing Guidelines
-Add tests next to the affected behavior, following the existing `tests/test_*.py` pattern. Prefer `FakeBackend` / `FakeAsyncBackend` over mocks so lifecycle and result mapping stay deterministic. Mark live infrastructure coverage with `@pytest.mark.integration`. When changing execution, session, or security behavior, cover timeout handling, protocol parsing, detach/close flows, and network-policy defaults.
+For non-trivial implementation or migration work, read in this order:
+1. [docs/exec-plans/PLAN_TEMPLATE.md](./docs/exec-plans/PLAN_TEMPLATE.md)
+2. [docs/exec-plans/index.md](./docs/exec-plans/index.md)
+3. The initiative plan: `docs/exec-plans/active/<initiative>/PLAN_<initiative>.md`
+4. `docs/exec-plans/active/<initiative>/state/session-state.json`
+5. `docs/exec-plans/active/<initiative>/state/feature-list.json`
+6. `docs/exec-plans/active/<initiative>/state/progress.jsonl`
 
-## Commit & Pull Request Guidelines
-Current history uses short imperative subjects such as `Add project documentation`. Follow that pattern with concise present-tense commit lines. PRs should explain the behavioral change, list the commands you ran, state whether integration tests were run or skipped, and call out any security-sensitive changes to network access, secrets, or sandbox lifecycle.
+## Canonical Path Map
 
-## Security & Configuration Tips
-The default network policy is blocked; treat any relaxation as a security-relevant change. Never commit Modal credentials or sandbox secrets. Keep agent state and secrets outside the sandbox unless the change explicitly requires a reviewed exception.
+- Architecture and package map: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- Product intent: [docs/PRODUCT_SENSE.md](./docs/PRODUCT_SENSE.md)
+- Product specs: [docs/product-specs](./docs/product-specs)
+- Design docs: [docs/design-docs/index.md](./docs/design-docs/index.md)
+- Reference material: [docs/references/index.md](./docs/references/index.md)
+- Planning standard: [docs/PLANS.md](./docs/PLANS.md)
+- Exec-plan template: [docs/exec-plans/PLAN_TEMPLATE.md](./docs/exec-plans/PLAN_TEMPLATE.md)
+- Reliability rules: [docs/RELIABILITY.md](./docs/RELIABILITY.md)
+- Security rules: [docs/SECURITY.md](./docs/SECURITY.md)
+- Quality ledger: [docs/QUALITY_SCORE.md](./docs/QUALITY_SCORE.md)
+- Generated schema docs: [docs/generated/db-schema.md](./docs/generated/db-schema.md)
+
+## Routing By Work Type
+
+- Public API or package boundaries: read `ARCHITECTURE.md`, then `src/agent_sandbox/session.py`, `src/agent_sandbox/tool.py`, and `docs/design-docs/modules.md`.
+- Modal backend/runtime work: read `src/agent_sandbox/backend/modal_backend.py`, [docs/design-docs/design-decisions.md](./docs/design-docs/design-decisions.md), and [docs/SECURITY.md](./docs/SECURITY.md).
+- Python execution/protocol work: read `src/agent_sandbox/execution/`, [docs/design-docs/execution-flow.md](./docs/design-docs/execution-flow.md), and [docs/generated/db-schema.md](./docs/generated/db-schema.md).
+- Test or verification work: read [docs/references/testing.md](./docs/references/testing.md) and the matching files in `tests/`.
+- Docs/governance work: read [docs/PLANS.md](./docs/PLANS.md), [docs/exec-plans/index.md](./docs/exec-plans/index.md), and [docs/design-docs/core-beliefs.md](./docs/design-docs/core-beliefs.md).
+
+## Working Rules
+
+- Use the `docs/product-specs` directory for specs. Do not introduce legacy top-level spec folders.
+- Use `docs/exec-plans/` for durable plans. Do not introduce legacy hidden planning folders.
+- Active initiatives use exactly one `PLAN_<initiative>.md` plus `state/feature-list.json`, `state/session-state.json`, and `state/progress.jsonl`.
+- `state/feature-list.json` is the canonical implementation checklist. Markdown task files are deprecated by default.
+- Run `./scripts/execplan/check.sh` before closing docs or planning changes.
+
+## Core Commands
+
+- Install: `pip install -e .[dev]`
+- Lint: `ruff check .`
+- Format check: `ruff format --check .`
+- Types: `mypy src`
+- Fast tests: `pytest -m "not integration"`
+- Live Modal tests: `MODAL_RUN_INTEGRATION=1 pytest -m integration`
+- Exec-plan validation: `./scripts/execplan/check.sh`
