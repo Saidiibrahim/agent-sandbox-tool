@@ -1,0 +1,46 @@
+{
+  "initiative": "harness-knowledge-migration",
+  "plan_file": "PLAN_harness-knowledge-migration.md",
+  "created_at": "2026-03-27T06:20:00Z",
+  "last_updated": "2026-03-27T07:15:00Z",
+  "editing_rules": [
+    "Use this file as the canonical implementation checklist for the initiative.",
+    "Work one feature at a time and only flip passes to true after evidence-backed verification.",
+    "Keep the plan, session state, and progress log synchronized with real repository state."
+  ],
+  "features": [
+    {
+      "id": "canonical-layout",
+      "category": "docs",
+      "description": "Scaffold the canonical docs tree and rehome existing tracked docs into the required taxonomy.",
+      "passes": true,
+      "steps": [
+        "Create docs/design-docs, docs/references, docs/product-specs, docs/generated, and docs/exec-plans.",
+        "Move tracked docs with git mv to preserve history.",
+        "Add index files that route agents to the right canonical documents."
+      ]
+    },
+    {
+      "id": "json-state-execplans",
+      "category": "planning",
+      "description": "Introduce the markdown-plan-plus-JSON-state exec-plan workflow with validation tooling.",
+      "passes": true,
+      "steps": [
+        "Add docs/PLANS.md, docs/exec-plans/PLAN_TEMPLATE.md, index files, and the active/completed layout.",
+        "Add scripts/execplan/check.sh and scripts/execplan/validate-state.mjs.",
+        "Record this migration in a completed plan with JSON state."
+      ]
+    },
+    {
+      "id": "generated-schema-and-verification",
+      "category": "governance",
+      "description": "Generate the typed schema reference and prove the migration with grep, link, lint, type, and test checks.",
+      "passes": true,
+      "steps": [
+        "Generate docs/generated/db-schema.md from the current typed schema source.",
+        "Update README and CI to point at the canonical docs and checks.",
+        "Run exec-plan, link, lint, type, and test verification."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "initiative": "harness-knowledge-migration",
+  "plan_file": "PLAN_harness-knowledge-migration.md",
+  "status": "completed",
+  "last_updated": "2026-03-27T07:15:00Z",
+  "active_feature_id": null,
+  "completed_feature_ids": [
+    "canonical-layout",
+    "json-state-execplans",
+    "generated-schema-and-verification"
+  ],
+  "blocked_by": [],
+  "next_action": "Start future non-trivial work under docs/exec-plans/active using PLAN_TEMPLATE.md and the JSON state trio.",
+  "handoff_rules": [
+    "Read AGENTS.md, docs/PLANS.md, and docs/exec-plans/index.md before creating a new initiative.",
+    "Use state/feature-list.json as the checklist of record instead of markdown task files.",
+    "Run ./scripts/execplan/check.sh before closing planning or docs changes."
+  ]
+}
