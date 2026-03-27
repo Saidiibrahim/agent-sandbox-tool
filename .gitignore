@@ -26,6 +26,5 @@ venv/
 Thumbs.db
 
 # Agents
-.agent/
 .codex/
 .claude/

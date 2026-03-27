@@ -1,17 +1,17 @@
 # agent-sandbox-modal
 
-`agent-sandbox-modal` is a small embeddable Python library for **Pattern 2: Sandbox as Tool**.
+`agent-sandbox-modal` is a small embeddable Python library for Pattern 2 sandboxing.
 
-Your agent stays in your application process. When it needs to execute code, it calls this package, which runs the code in a remote Modal Sandbox and returns a structured result.
+Your agent stays in your application process. When it needs to execute code, it calls this package, which runs the code in a remote Modal sandbox and returns a structured result.
 
 ## Why this package exists
 
 This package is intentionally narrow:
 
-- it is **not** a full agent framework
-- it keeps **agent state and secrets outside** the sandbox
-- it gives you a **small Python API** you can embed into existing agent loops
-- it is designed to be safe by default, typed, and easy to test
+- it is not a full agent framework
+- it keeps agent state and secrets outside the sandbox
+- it gives you a small typed Python API you can embed into existing agent loops
+- it is designed to be safe by default, easy to test, and legible to coding agents
 
 ## Installation
 
@@ -46,22 +46,6 @@ math.pi * radius ** 2
     print(shell_result.stdout)
 ```
 
-Example result shape:
-
-```json
-{
-  "kind": "python",
-  "status": "succeeded",
-  "success": true,
-  "stdout": "running in sandbox\n",
-  "stderr": "",
-  "exit_code": 0,
-  "value_repr": "28.274333882308138",
-  "error_type": null,
-  "error_message": null
-}
-```
-
 ## Agent-friendly wrapper
 
 ```python
@@ -88,9 +72,7 @@ Use `SandboxSession.attach(...)` if you want to reconnect later with a saved `sa
 
 ## Security defaults
 
-The default configuration blocks all outbound network access.
-
-That is intentional. If an LLM is allowed to generate arbitrary shell or Python commands, the biggest practical risk is usually not “breaking out” of the container — it is **exfiltrating data over the network** or using credentials that should never have been available in the sandbox in the first place.
+The default configuration blocks all outbound network access. That is intentional. If an LLM can generate arbitrary shell or Python commands, the most common practical risk is exfiltration or misuse of credentials, not only container escape.
 
 ## MVP scope
 
@@ -113,6 +95,14 @@ Deferred on purpose:
 - notebook-style stateful Python driver
 - snapshots and pooling
 
+## Repository knowledge
+
+- Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- Planning workflow: [docs/PLANS.md](./docs/PLANS.md)
+- Design docs: [docs/design-docs/index.md](./docs/design-docs/index.md)
+- Product intent: [docs/PRODUCT_SENSE.md](./docs/PRODUCT_SENSE.md)
+- Testing reference: [docs/references/testing.md](./docs/references/testing.md)
+
 ## Development
 
 ```bash
@@ -121,6 +111,7 @@ ruff check .
 ruff format --check .
 mypy src
 pytest -m "not integration"
+./scripts/execplan/check.sh
 ```
 
 Integration tests are opt-in:
