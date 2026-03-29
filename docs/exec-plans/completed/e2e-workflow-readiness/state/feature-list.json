@@ -1,0 +1,45 @@
+{
+  "initiative": "e2e-workflow-readiness",
+  "plan_file": "PLAN_e2e-workflow-readiness.md",
+  "created_at": "2026-03-29T06:15:51Z",
+  "last_updated": "2026-03-29T06:26:42Z",
+  "editing_rules": [
+    "Use this file as the canonical implementation checklist for the initiative.",
+    "Work one feature at a time and only flip passes to true after evidence-backed verification.",
+    "Keep the plan, session state, and progress log synchronized with real repository state."
+  ],
+  "features": [
+    {
+      "id": "execplan-validator-link",
+      "category": "docs",
+      "description": "Repair the broken historical exec-plan markdown link so the validator is green again.",
+      "passes": true,
+      "steps": [
+        "Correct the relative link in the completed senior-feedback-productionization plan.",
+        "Rerun ./scripts/execplan/check.sh and confirm no broken local markdown links remain."
+      ]
+    },
+    {
+      "id": "modal-timeout-normalization",
+      "category": "runtime",
+      "description": "Normalize the real Modal timeout sentinel so developer-facing Python and CLI flows return structured timed_out results instead of ProtocolError.",
+      "passes": true,
+      "steps": [
+        "Reproduce and capture the raw backend timeout shape.",
+        "Normalize the missing Modal timeout sentinel in src/agent_sandbox/backend/modal_backend.py.",
+        "Add regression coverage for the backend path and strengthen the live integration timeout assertions."
+      ]
+    },
+    {
+      "id": "verification-bundle",
+      "category": "verification",
+      "description": "Prove the repository is ready for future end-to-end developer workflows with the full local, live, and manual validation bundle.",
+      "passes": true,
+      "steps": [
+        "Run lint, format, typecheck, non-integration tests, build, and exec-plan validation.",
+        "Run MODAL_RUN_INTEGRATION=1 .venv/bin/pytest -m integration three consecutive times.",
+        "Run manual library and CLI timeout proofs and confirm stable structured timeout behavior."
+      ]
+    }
+  ]
+}

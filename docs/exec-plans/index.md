@@ -12,6 +12,7 @@ Use this directory for durable task tracking.
 
 ## Completed Initiatives
 
+- [E2E workflow readiness](./completed/e2e-workflow-readiness/PLAN_e2e-workflow-readiness.md)
 - [Senior feedback productionization](./completed/senior-feedback-productionization/PLAN_senior-feedback-productionization.md)
 - [Harness knowledge migration](./completed/harness-knowledge-migration/PLAN_harness-knowledge-migration.md)
 
