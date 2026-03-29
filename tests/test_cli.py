@@ -14,12 +14,19 @@ from agent_sandbox.cli import (
     EXIT_MODAL,
     EXIT_NOT_FOUND,
     EXIT_OK,
+    EXIT_RUN_FAILED,
     EXIT_USAGE,
     main,
 )
 from agent_sandbox.config import ModalSandboxConfig
 from agent_sandbox.diagnostics import ModalEnvironmentReport
-from agent_sandbox.models import SessionInfo, SessionStatus
+from agent_sandbox.models import (
+    ExecutionKind,
+    ExecutionResult,
+    ExecutionStatus,
+    SessionInfo,
+    SessionStatus,
+)
 from agent_sandbox.state import LocalStateStore, StoredSession
 
 
@@ -203,3 +210,62 @@ def test_cli_serve_uses_cli_state_dir_and_skips_modal_gate(
     assert called["host"] == "0.0.0.0"
     assert called["port"] == 8123
     assert called["log_level"] == "info"
+
+
+def test_cli_run_python_timeout_returns_structured_json_and_run_failed_exit(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    now = datetime.now(UTC)
+
+    class FakeManager:
+        def __init__(self, store):
+            self.store = store
+
+        def run_python(self, session_id: str, code: str, *, timeout_seconds: int | None = None):
+            _ = (code, timeout_seconds)
+            return ExecutionResult(
+                kind=ExecutionKind.PYTHON,
+                status=ExecutionStatus.TIMED_OUT,
+                success=False,
+                command=("python", "-u", "-c", "runner"),
+                error_type="ExecTimeoutError",
+                error_message="Command exceeded timeout of 1 seconds.",
+                session_id=session_id,
+                sandbox_id="sb-timeout",
+                started_at=now,
+                completed_at=now,
+                duration_seconds=1.0,
+            )
+
+    monkeypatch.setattr(
+        "agent_sandbox.cli.validate_modal_environment",
+        lambda **kwargs: ModalEnvironmentReport(
+            ok=True,
+            modal_installed=True,
+            modal_version="1.0.0",
+            auth_configured=True,
+        ),
+    )
+    monkeypatch.setattr("agent_sandbox.cli.SandboxManager", FakeManager)
+
+    exit_code = main(
+        [
+            "--json",
+            "--state-dir",
+            str(tmp_path),
+            "run",
+            "python",
+            "sess-timeout",
+            "--code",
+            "import time; time.sleep(5)",
+            "--timeout-seconds",
+            "1",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == EXIT_RUN_FAILED
+    assert payload["status"] == "timed_out"
+    assert payload["success"] is False
+    assert payload["error_type"] == "ExecTimeoutError"

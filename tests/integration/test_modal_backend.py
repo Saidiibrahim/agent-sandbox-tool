@@ -55,6 +55,12 @@ Path('note.txt').write_text('hello from modal')
 
 def test_timeout_returns_structured_result(config: ModalSandboxConfig) -> None:
     with SandboxSession(config) as session:
-        result = session.run_python("import time\ntime.sleep(5)", timeout_seconds=1)
-        assert result.status is ExecutionStatus.TIMED_OUT
-        assert result.success is False
+        for _ in range(3):
+            result = session.run_python("import time\ntime.sleep(5)", timeout_seconds=1)
+            assert result.status is ExecutionStatus.TIMED_OUT
+            assert result.success is False
+            assert result.error_type == "ExecTimeoutError"
+            assert "timeout of 1 seconds" in (result.error_message or "") or "timeout boundary" in (
+                result.error_message or ""
+            )
+            assert result.exit_code in (None, -1, 124, 137, 143)

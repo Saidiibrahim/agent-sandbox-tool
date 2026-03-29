@@ -3,6 +3,9 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
+from agent_sandbox.exceptions import ProtocolError
 from agent_sandbox.execution.python_runner import (
     build_python_command,
     build_python_request,
@@ -44,3 +47,8 @@ def test_runner_captures_exceptions_without_crashing() -> None:
     assert response.error_type == "ValueError"
     assert "boom" in (response.error_message or "")
     assert "Traceback" in (response.traceback or "")
+
+
+def test_parse_python_response_rejects_empty_stdout() -> None:
+    with pytest.raises(ProtocolError, match="did not return a JSON payload"):
+        parse_python_response("")

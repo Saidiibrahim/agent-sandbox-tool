@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from agent_sandbox.config import ModalSandboxConfig
@@ -47,3 +50,58 @@ async def test_async_session_maps_python_timeout_sentinel() -> None:
     assert result.status is ExecutionStatus.TIMED_OUT
     assert result.success is False
     assert result.error_type == "ExecTimeoutError"
+
+
+@pytest.mark.asyncio
+async def test_async_session_maps_python_timeout_error_type_to_timed_out_result() -> None:
+    backend = FakeAsyncBackend(
+        queue=[
+            backend_result(
+                stdout="",
+                exit_code=137,
+                error_type="ExecTimeoutError",
+                error_message=(
+                    "Command exceeded timeout of 1 seconds. "
+                    "Modal returned signal exit code 137 at the execution deadline."
+                ),
+                command=("python", "-u", "-c", "runner"),
+            )
+        ]
+    )
+    session = AsyncSandboxSession(ModalSandboxConfig(), backend=backend)
+
+    result = await session.run_python("import time\ntime.sleep(5)", timeout_seconds=1)
+
+    assert result.status is ExecutionStatus.TIMED_OUT
+    assert result.success is False
+    assert result.error_type == "ExecTimeoutError"
+    assert "timeout of 1 seconds" in (result.error_message or "")
+    assert result.exit_code is None
+
+
+@pytest.mark.asyncio
+async def test_async_session_maps_missing_payload_with_no_exit_code_to_timed_out_result() -> None:
+    started_at = datetime.now(UTC)
+    backend = FakeAsyncBackend(
+        queue=[
+            replace(
+                backend_result(
+                    stdout="",
+                    stderr="",
+                    exit_code=None,
+                    command=("python", "-u", "-c", "runner"),
+                ),
+                started_at=started_at,
+                completed_at=started_at + timedelta(seconds=1.05),
+            )
+        ]
+    )
+    session = AsyncSandboxSession(ModalSandboxConfig(), backend=backend)
+
+    result = await session.run_python("import time\ntime.sleep(5)", timeout_seconds=1)
+
+    assert result.status is ExecutionStatus.TIMED_OUT
+    assert result.success is False
+    assert result.error_type == "ExecTimeoutError"
+    assert "without a JSON payload" in (result.error_message or "")
+    assert result.exit_code is None
