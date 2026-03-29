@@ -1,6 +1,6 @@
 # agent-sandbox-modal
 
-`agent-sandbox-modal` is a library-first developer tool for running untrusted Python and shell code in Modal Sandboxes.
+`agent-sandbox-modal` is a tool for running untrusted Python and shell code in Modal Sandboxes.
 
 It is intentionally narrow:
 
