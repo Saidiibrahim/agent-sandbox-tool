@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-sandbox-modal"
-version = "0.1.0"
-description = "Embeddable Pattern 2 sandbox tooling for agent systems using Modal Sandboxes."
+version = "0.2.0"
+description = "Embeddable Modal sandbox tooling for securely running untrusted code in developer workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Ibrahim" }]
 keywords = ["agent", "sandbox", "modal", "llm", "code-execution"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -26,8 +26,23 @@ dependencies = [
   "pydantic>=2.8,<3.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Saidiibrahim/agent-sandbox-tool"
+Repository = "https://github.com/Saidiibrahim/agent-sandbox-tool"
+Issues = "https://github.com/Saidiibrahim/agent-sandbox-tool/issues"
+
+[project.scripts]
+agent-sandbox = "agent_sandbox.cli:main"
+
 [project.optional-dependencies]
+server = [
+  "fastapi>=0.111,<1.0",
+  "pydantic-settings>=2.4,<3.0",
+  "uvicorn>=0.30,<1.0",
+]
 dev = [
+  "build>=1.2",
+  "httpx>=0.27",
   "mypy>=1.11",
   "pre-commit>=3.8",
   "pytest>=8.3",
@@ -38,6 +53,16 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_sandbox"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/README.md",
+  "/pyproject.toml",
+  "/src",
+  "/tests",
+  "/docs",
+  "/scripts",
+]
 
 [tool.ruff]
 target-version = "py311"
