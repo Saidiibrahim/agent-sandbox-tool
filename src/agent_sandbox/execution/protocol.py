@@ -1,13 +1,23 @@
+"""Versioned request and response models for Python execution.
+
+The host process serializes a ``PythonExecutionRequest`` to stdin, while the
+bootstrap script running inside the sandbox emits a single JSON
+``PythonExecutionResponse`` on stdout. Keeping the protocol explicit avoids
+fragile stdout parsing.
+"""
+
 from __future__ import annotations
 
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION: Literal[1] = 1
 
 
 class PythonExecutionRequest(BaseModel):
+    """Input payload consumed by the sandbox-side Python runner bootstrap."""
+
     model_config = ConfigDict(extra="forbid")
 
     protocol_version: Literal[1] = PROTOCOL_VERSION
@@ -18,6 +28,8 @@ class PythonExecutionRequest(BaseModel):
 
 
 class PythonExecutionResponse(BaseModel):
+    """Structured stdout payload emitted by the sandbox-side Python runner."""
+
     model_config = ConfigDict(extra="forbid")
 
     protocol_version: Literal[1] = PROTOCOL_VERSION

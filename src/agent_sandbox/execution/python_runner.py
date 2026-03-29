@@ -1,12 +1,21 @@
+"""Helpers for the structured Python execution path.
+
+The host process injects a small bootstrap program into the sandbox so Python
+execution returns one JSON payload instead of ad hoc stdout parsing. This file
+builds the command/request pair and validates the structured response.
+"""
+
 from __future__ import annotations
 
 import textwrap
 
 from ..exceptions import ProtocolError
-from .protocol import PROTOCOL_VERSION, PythonExecutionRequest, PythonExecutionResponse
+from .protocol import PythonExecutionRequest, PythonExecutionResponse
 
+# The bootstrap script runs inside the sandbox and must emit exactly one JSON
+# response on stdout so the host can parse results deterministically.
 PYTHON_RUNNER_BOOTSTRAP = textwrap.dedent(
-    r'''
+    r"""
     import ast
     import contextlib
     import io
@@ -172,12 +181,12 @@ PYTHON_RUNNER_BOOTSTRAP = textwrap.dedent(
             )
             raise
         raise SystemExit(exit_code)
-    '''
+    """
 ).strip()
 
 
 def build_python_command() -> tuple[str, str, str, str]:
-    """Command used for one Python execution inside a sandbox."""
+    """Return the interpreter command that runs the bootstrap inside a sandbox."""
 
     return ("python", "-u", "-c", PYTHON_RUNNER_BOOTSTRAP)
 
@@ -189,6 +198,8 @@ def build_python_request(
     max_output_chars: int,
     max_value_repr_chars: int,
 ) -> PythonExecutionRequest:
+    """Build a validated request payload for one Python execution."""
+
     return PythonExecutionRequest(
         code=code,
         working_dir=working_dir,
@@ -198,6 +209,13 @@ def build_python_request(
 
 
 def parse_python_response(stdout: str) -> PythonExecutionResponse:
+    """Parse the bootstrap's JSON response from stdout.
+
+    The parser tolerates extra log lines by consuming the last non-empty line,
+    but it still requires that the final payload validate against the versioned
+    response model.
+    """
+
     payload = stdout.strip()
     if not payload:
         raise ProtocolError("Python runner did not return a JSON payload on stdout.")
