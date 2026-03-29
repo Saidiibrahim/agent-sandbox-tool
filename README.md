@@ -101,6 +101,7 @@ That means:
 - Python globals do not persist between `run_python()` calls
 - the filesystem does persist while the sandbox is alive
 - every execution gets a `run_id`, `sequence_number`, structured status, stdout/stderr, and best-effort artifact metadata
+- Modal deadline expirations are normalized into structured `timed_out` results across library, CLI, and HTTP surfaces
 
 ### Session lifecycle
 

@@ -33,6 +33,7 @@ def _timed_out_command_result(
     started_at: datetime,
     sandbox_id: str | None,
     timeout_seconds: int | None,
+    observed_exit_code: int | None = None,
 ) -> BackendCommandResult:
     """Normalize Modal timeout sentinels into the shared backend result shape."""
 
@@ -41,6 +42,10 @@ def _timed_out_command_result(
         if timeout_seconds is not None
         else "Command exceeded its execution timeout."
     )
+    if observed_exit_code not in (None, -1):
+        timeout_message += (
+            f" Modal returned signal exit code {observed_exit_code} at the execution deadline."
+        )
     return BackendCommandResult(
         command=command,
         stdout=stdout,
@@ -53,6 +58,31 @@ def _timed_out_command_result(
         error_type="ExecTimeoutError",
         error_message=timeout_message,
     )
+
+
+def _looks_like_modal_deadline_signal_exit(
+    *,
+    exit_code: int | None,
+    stdout: str,
+    stderr: str,
+    started_at: datetime,
+    completed_at: datetime,
+    timeout_seconds: int | None,
+) -> bool:
+    """Detect the observed deadline-enforcement shapes exposed by Modal.
+
+    Live verification showed Modal can enforce a deadline by returning either a
+    signal exit or no exit code at all, both with empty stdout/stderr, instead
+    of raising ``ExecTimeoutError`` or returning ``-1``. Keep this heuristic
+    narrow so unrelated command failures stay visible.
+    """
+
+    if timeout_seconds is None or exit_code not in {None, 137, 143}:
+        return False
+    if stdout.strip() or stderr.strip():
+        return False
+    elapsed_seconds = (completed_at - started_at).total_seconds()
+    return elapsed_seconds >= float(timeout_seconds)
 
 
 def _import_modal() -> Any:
@@ -369,6 +399,7 @@ class ModalBackend:
             exit_code = process.wait()
             stdout = process.stdout.read()
             stderr = process.stderr.read()
+            completed_at = _utcnow()
             if exit_code == -1 and timeout_seconds is not None:
                 return _timed_out_command_result(
                     command=cmd,
@@ -378,6 +409,36 @@ class ModalBackend:
                     sandbox_id=self._sandbox_id,
                     timeout_seconds=timeout_seconds,
                 )
+            if _looks_like_modal_deadline_signal_exit(
+                exit_code=exit_code,
+                stdout=stdout,
+                stderr=stderr,
+                started_at=started_at,
+                completed_at=completed_at,
+                timeout_seconds=timeout_seconds,
+            ):
+                logger.debug(
+                    (
+                        "Modal command timeout surfaced without a normal timeout "
+                        "sentinel; normalizing to ExecTimeoutError"
+                    ),
+                    extra={
+                        "sandbox_id": self._sandbox_id,
+                        "command": cmd,
+                        "exit_code": exit_code,
+                        "timeout_seconds": timeout_seconds,
+                        "elapsed_seconds": (completed_at - started_at).total_seconds(),
+                    },
+                )
+                return _timed_out_command_result(
+                    command=cmd,
+                    stdout=stdout,
+                    stderr=stderr,
+                    started_at=started_at,
+                    sandbox_id=self._sandbox_id,
+                    timeout_seconds=timeout_seconds,
+                    observed_exit_code=exit_code,
+                )
             return BackendCommandResult(
                 command=cmd,
                 stdout=stdout,
@@ -385,21 +446,17 @@ class ModalBackend:
                 exit_code=exit_code,
                 timed_out=False,
                 started_at=started_at,
-                completed_at=_utcnow(),
+                completed_at=completed_at,
                 sandbox_id=self._sandbox_id,
             )
-        except modal.exception.ExecTimeoutError as exc:
-            return BackendCommandResult(
+        except modal.exception.ExecTimeoutError:
+            return _timed_out_command_result(
                 command=cmd,
                 stdout=self._safe_read(process.stdout) if process is not None else "",
                 stderr=self._safe_read(process.stderr) if process is not None else "",
-                exit_code=None,
-                timed_out=True,
                 started_at=started_at,
-                completed_at=_utcnow(),
                 sandbox_id=self._sandbox_id,
-                error_type=type(exc).__name__,
-                error_message=str(exc),
+                timeout_seconds=timeout_seconds,
             )
         except modal.Error as exc:
             raise BackendError(f"Modal command execution failed: {exc}") from exc
@@ -427,6 +484,7 @@ class ModalBackend:
             exit_code = await process.wait.aio()
             stdout = await process.stdout.read.aio()
             stderr = await process.stderr.read.aio()
+            completed_at = _utcnow()
             if exit_code == -1 and timeout_seconds is not None:
                 return _timed_out_command_result(
                     command=cmd,
@@ -436,6 +494,36 @@ class ModalBackend:
                     sandbox_id=self._sandbox_id,
                     timeout_seconds=timeout_seconds,
                 )
+            if _looks_like_modal_deadline_signal_exit(
+                exit_code=exit_code,
+                stdout=stdout,
+                stderr=stderr,
+                started_at=started_at,
+                completed_at=completed_at,
+                timeout_seconds=timeout_seconds,
+            ):
+                logger.debug(
+                    (
+                        "Async Modal command timeout surfaced without a normal "
+                        "timeout sentinel; normalizing to ExecTimeoutError"
+                    ),
+                    extra={
+                        "sandbox_id": self._sandbox_id,
+                        "command": cmd,
+                        "exit_code": exit_code,
+                        "timeout_seconds": timeout_seconds,
+                        "elapsed_seconds": (completed_at - started_at).total_seconds(),
+                    },
+                )
+                return _timed_out_command_result(
+                    command=cmd,
+                    stdout=stdout,
+                    stderr=stderr,
+                    started_at=started_at,
+                    sandbox_id=self._sandbox_id,
+                    timeout_seconds=timeout_seconds,
+                    observed_exit_code=exit_code,
+                )
             return BackendCommandResult(
                 command=cmd,
                 stdout=stdout,
@@ -443,21 +531,17 @@ class ModalBackend:
                 exit_code=exit_code,
                 timed_out=False,
                 started_at=started_at,
-                completed_at=_utcnow(),
+                completed_at=completed_at,
                 sandbox_id=self._sandbox_id,
             )
-        except modal.exception.ExecTimeoutError as exc:
-            return BackendCommandResult(
+        except modal.exception.ExecTimeoutError:
+            return _timed_out_command_result(
                 command=cmd,
                 stdout=await self._asafe_read(process.stdout) if process is not None else "",
                 stderr=await self._asafe_read(process.stderr) if process is not None else "",
-                exit_code=None,
-                timed_out=True,
                 started_at=started_at,
-                completed_at=_utcnow(),
                 sandbox_id=self._sandbox_id,
-                error_type=type(exc).__name__,
-                error_message=str(exc),
+                timeout_seconds=timeout_seconds,
             )
         except modal.Error as exc:
             raise BackendError(f"Modal command execution failed: {exc}") from exc

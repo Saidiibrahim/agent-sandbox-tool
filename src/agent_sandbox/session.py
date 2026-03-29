@@ -203,7 +203,84 @@ def _diff_artifacts(
 def _backend_result_timed_out(raw: BackendCommandResult) -> bool:
     """Return whether a backend result represents a normalized timeout path."""
 
-    return raw.timed_out or (raw.exit_code == -1 and raw.error_type == "ExecTimeoutError")
+    return raw.timed_out or raw.error_type == "ExecTimeoutError"
+
+
+def _result_duration_seconds(raw: BackendCommandResult) -> float:
+    return (raw.completed_at - raw.started_at).total_seconds()
+
+
+def _timed_out_python_result(
+    raw: BackendCommandResult,
+    handle: SandboxHandle,
+    *,
+    run_id: str,
+    sequence_number: int,
+    artifacts: tuple[ArtifactMetadata, ...],
+    exit_code: int | None = None,
+    error_type: str | None = None,
+    error_message: str | None = None,
+) -> ExecutionResult:
+    return ExecutionResult(
+        run_id=run_id,
+        sequence_number=sequence_number,
+        kind=ExecutionKind.PYTHON,
+        status=ExecutionStatus.TIMED_OUT,
+        success=False,
+        command=raw.command,
+        stdout=raw.stdout,
+        stderr=raw.stderr,
+        exit_code=exit_code,
+        error_type=error_type if error_type is not None else raw.error_type,
+        error_message=error_message if error_message is not None else raw.error_message,
+        artifacts=artifacts,
+        session_id=handle.session_id,
+        sandbox_id=handle.sandbox_id,
+        started_at=raw.started_at,
+        completed_at=raw.completed_at,
+        duration_seconds=_result_duration_seconds(raw),
+    )
+
+
+def _raw_timeout_hint(raw: BackendCommandResult) -> bool:
+    if raw.error_type and "timeout" in raw.error_type.lower():
+        return True
+    if raw.error_message and "timeout" in raw.error_message.lower():
+        return True
+    return raw.exit_code in {None, -1, 137, 143}
+
+
+def _timeout_boundary_reached(raw: BackendCommandResult, timeout_seconds: int | None) -> bool:
+    if timeout_seconds is None:
+        return False
+    tolerance_seconds = min(0.5, timeout_seconds * 0.25)
+    return _result_duration_seconds(raw) >= max(timeout_seconds - tolerance_seconds, 0)
+
+
+def _should_normalize_missing_python_payload_as_timeout(
+    raw: BackendCommandResult, *, timeout_seconds: int | None
+) -> bool:
+    return (
+        timeout_seconds is not None
+        and not raw.stdout.strip()
+        and raw.exit_code != 0
+        and _timeout_boundary_reached(raw, timeout_seconds)
+        and _raw_timeout_hint(raw)
+    )
+
+
+def _missing_payload_timeout_message(raw: BackendCommandResult, timeout_seconds: int | None) -> str:
+    if raw.error_message:
+        return raw.error_message
+    if timeout_seconds is None:
+        return (
+            "Python runner exited without a JSON payload after reaching its execution "
+            "timeout boundary; normalized to timed_out."
+        )
+    return (
+        "Python runner exited without a JSON payload after reaching the "
+        f"{timeout_seconds}-second timeout boundary; normalized to timed_out."
+    )
 
 
 def _map_python_result(
@@ -213,31 +290,49 @@ def _map_python_result(
     run_id: str,
     sequence_number: int,
     artifacts: tuple[ArtifactMetadata, ...],
+    timeout_seconds: int | None,
 ) -> ExecutionResult:
     """Map a backend Python command into the public execution result contract."""
 
     if _backend_result_timed_out(raw):
-        return ExecutionResult(
+        return _timed_out_python_result(
+            raw,
+            handle,
             run_id=run_id,
             sequence_number=sequence_number,
-            kind=ExecutionKind.PYTHON,
-            status=ExecutionStatus.TIMED_OUT,
-            success=False,
-            command=raw.command,
-            stdout=raw.stdout,
-            stderr=raw.stderr,
-            exit_code=raw.exit_code,
-            error_type=raw.error_type,
-            error_message=raw.error_message,
             artifacts=artifacts,
-            session_id=handle.session_id,
-            sandbox_id=handle.sandbox_id,
-            started_at=raw.started_at,
-            completed_at=raw.completed_at,
-            duration_seconds=(raw.completed_at - raw.started_at).total_seconds(),
+            exit_code=None,
         )
 
-    protocol = parse_python_response(raw.stdout)
+    try:
+        protocol = parse_python_response(raw.stdout)
+    except ProtocolError:
+        if not _should_normalize_missing_python_payload_as_timeout(
+            raw, timeout_seconds=timeout_seconds
+        ):
+            raise
+        logger.warning(
+            "Normalizing Python timeout without structured runner payload",
+            extra={
+                "session_id": handle.session_id,
+                "sandbox_id": handle.sandbox_id,
+                "exit_code": raw.exit_code,
+                "error_type": raw.error_type,
+                "timeout_seconds": timeout_seconds,
+                "duration_seconds": _result_duration_seconds(raw),
+            },
+        )
+        return _timed_out_python_result(
+            raw,
+            handle,
+            run_id=run_id,
+            sequence_number=sequence_number,
+            artifacts=artifacts,
+            exit_code=None,
+            error_type=raw.error_type or "ExecTimeoutError",
+            error_message=_missing_payload_timeout_message(raw, timeout_seconds),
+        )
+
     status = ExecutionStatus.SUCCEEDED
     if protocol.runner_error:
         status = ExecutionStatus.BACKEND_ERROR
@@ -272,7 +367,7 @@ def _map_python_result(
         sandbox_id=handle.sandbox_id,
         started_at=raw.started_at,
         completed_at=raw.completed_at,
-        duration_seconds=(raw.completed_at - raw.started_at).total_seconds(),
+        duration_seconds=_result_duration_seconds(raw),
     )
 
 
@@ -291,16 +386,19 @@ def _map_shell_result(
         success = False
         error_type = raw.error_type
         error_message = raw.error_message
+        exit_code = None
     elif raw.exit_code == 0:
         status = ExecutionStatus.SUCCEEDED
         success = True
         error_type = None
         error_message = None
+        exit_code = raw.exit_code
     else:
         status = ExecutionStatus.FAILED
         success = False
         error_type = "NonZeroExit"
         error_message = f"Command exited with status {raw.exit_code}."
+        exit_code = raw.exit_code
 
     return ExecutionResult(
         run_id=run_id,
@@ -311,7 +409,7 @@ def _map_shell_result(
         command=raw.command,
         stdout=raw.stdout,
         stderr=raw.stderr,
-        exit_code=raw.exit_code,
+        exit_code=exit_code,
         error_type=error_type,
         error_message=error_message,
         artifacts=artifacts,
@@ -319,7 +417,7 @@ def _map_shell_result(
         sandbox_id=handle.sandbox_id,
         started_at=raw.started_at,
         completed_at=raw.completed_at,
-        duration_seconds=(raw.completed_at - raw.started_at).total_seconds(),
+        duration_seconds=_result_duration_seconds(raw),
     )
 
 
@@ -459,6 +557,7 @@ class SandboxSession:
             run_id = uuid.uuid4().hex
             sequence_number = self._next_sequence_number()
             before = self._capture_manifest_best_effort()
+            effective_timeout_seconds = timeout_seconds or self._config.default_exec_timeout_seconds
             request = build_python_request(
                 code=code,
                 working_dir=self._config.working_dir,
@@ -468,7 +567,7 @@ class SandboxSession:
             raw = self._backend.run(
                 build_python_command(),
                 stdin_text=request.model_dump_json(),
-                timeout_seconds=timeout_seconds or self._config.default_exec_timeout_seconds,
+                timeout_seconds=effective_timeout_seconds,
             )
             after = self._capture_manifest_best_effort()
             result = _map_python_result(
@@ -479,6 +578,7 @@ class SandboxSession:
                 artifacts=_diff_artifacts(
                     before=before, after=after, working_dir=self._config.working_dir
                 ),
+                timeout_seconds=effective_timeout_seconds,
             )
             self._record_run(result)
             return result
@@ -779,6 +879,7 @@ class AsyncSandboxSession:
             run_id = uuid.uuid4().hex
             sequence_number = self._next_sequence_number()
             before = await self._capture_manifest_best_effort()
+            effective_timeout_seconds = timeout_seconds or self._config.default_exec_timeout_seconds
             request = build_python_request(
                 code=code,
                 working_dir=self._config.working_dir,
@@ -788,7 +889,7 @@ class AsyncSandboxSession:
             raw = await self._backend.arun(
                 build_python_command(),
                 stdin_text=request.model_dump_json(),
-                timeout_seconds=timeout_seconds or self._config.default_exec_timeout_seconds,
+                timeout_seconds=effective_timeout_seconds,
             )
             after = await self._capture_manifest_best_effort()
             result = _map_python_result(
@@ -799,6 +900,7 @@ class AsyncSandboxSession:
                 artifacts=_diff_artifacts(
                     before=before, after=after, working_dir=self._config.working_dir
                 ),
+                timeout_seconds=effective_timeout_seconds,
             )
             self._record_run(result)
             return result
