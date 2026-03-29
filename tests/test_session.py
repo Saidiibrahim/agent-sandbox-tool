@@ -1,3 +1,5 @@
+"""Sync session regression tests for lifecycle and result mapping semantics."""
+
 from __future__ import annotations
 
 from agent_sandbox.config import ModalSandboxConfig
@@ -9,7 +11,9 @@ from .fakes import FakeBackend, backend_result
 
 
 def test_session_lazy_starts_and_maps_python_results() -> None:
-    protocol = PythonExecutionResponse(success=True, stdout="hi\n", value_repr="42").model_dump_json()
+    protocol = PythonExecutionResponse(
+        success=True, stdout="hi\n", value_repr="42"
+    ).model_dump_json()
     backend = FakeBackend(
         queue=[backend_result(stdout=protocol, command=("python", "-u", "-c", "runner"))]
     )
@@ -36,3 +40,23 @@ def test_shell_non_zero_exit_is_normal_result_not_exception() -> None:
     assert result.success is False
     assert result.error_type == "NonZeroExit"
     assert result.exit_code == 2
+
+
+def test_python_timeout_sentinel_maps_to_timed_out_result() -> None:
+    backend = FakeBackend(
+        queue=[
+            backend_result(
+                exit_code=-1,
+                error_type="ExecTimeoutError",
+                error_message="Command exceeded timeout of 1 seconds.",
+                command=("python", "-u", "-c", "runner"),
+            )
+        ]
+    )
+    session = SandboxSession(ModalSandboxConfig(), backend=backend)
+
+    result = session.run_python("import time\ntime.sleep(5)", timeout_seconds=1)
+
+    assert result.status is ExecutionStatus.TIMED_OUT
+    assert result.success is False
+    assert result.error_type == "ExecTimeoutError"

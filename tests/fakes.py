@@ -1,18 +1,28 @@
+"""Deterministic fake backends shared by unit tests.
+
+These fakes emulate the backend protocol closely enough to exercise session and
+tool semantics without depending on a live Modal environment.
+"""
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 
 from agent_sandbox.backend.base import BackendCommandResult
 
 
 @dataclass
 class FakeBackend:
+    """Synchronous fake backend with queued command results and in-memory files."""
+
     sandbox_id_value: str = "sb-fake"
     started: bool = False
     commands: list[tuple[str, ...]] = field(default_factory=list)
     queue: list[BackendCommandResult] = field(default_factory=list)
+    files: dict[str, str] = field(default_factory=dict)
 
     @property
     def sandbox_id(self) -> str | None:
@@ -35,8 +45,17 @@ class FakeBackend:
     ) -> BackendCommandResult:
         _ = (stdin_text, timeout_seconds)
         self.started = True
-        self.commands.append(tuple(command))
+        cmd = tuple(command)
+        self.commands.append(cmd)
+        if self._is_manifest_command(cmd):
+            return backend_result(stdout="[]", command=cmd)
         return self.queue.pop(0)
+
+    def read_text(self, remote_path: str) -> str:
+        return self.files[remote_path]
+
+    def download_file(self, remote_path: str, local_path: str) -> None:
+        Path(local_path).write_text(self.files[remote_path], encoding="utf-8")
 
     def terminate(self) -> None:
         return None
@@ -44,13 +63,27 @@ class FakeBackend:
     def detach(self) -> None:
         self.started = False
 
+    @staticmethod
+    def _is_manifest_command(command: tuple[str, ...]) -> bool:
+        """Detect the helper command used for artifact manifest capture."""
+
+        return (
+            len(command) >= 4
+            and command[0] == "python"
+            and command[1] == "-c"
+            and "items.sort" in command[2]
+        )
+
 
 @dataclass
 class FakeAsyncBackend:
+    """Async fake backend with queued command results and in-memory files."""
+
     sandbox_id_value: str = "sb-fake"
     started: bool = False
     commands: list[tuple[str, ...]] = field(default_factory=list)
     queue: list[BackendCommandResult] = field(default_factory=list)
+    files: dict[str, str] = field(default_factory=dict)
 
     @property
     def sandbox_id(self) -> str | None:
@@ -73,14 +106,34 @@ class FakeAsyncBackend:
     ) -> BackendCommandResult:
         _ = (stdin_text, timeout_seconds)
         self.started = True
-        self.commands.append(tuple(command))
+        cmd = tuple(command)
+        self.commands.append(cmd)
+        if self._is_manifest_command(cmd):
+            return backend_result(stdout="[]", command=cmd)
         return self.queue.pop(0)
+
+    async def aread_text(self, remote_path: str) -> str:
+        return self.files[remote_path]
+
+    async def adownload_file(self, remote_path: str, local_path: str) -> None:
+        Path(local_path).write_text(self.files[remote_path], encoding="utf-8")
 
     async def aterminate(self) -> None:
         return None
 
     async def adetach(self) -> None:
         self.started = False
+
+    @staticmethod
+    def _is_manifest_command(command: tuple[str, ...]) -> bool:
+        """Detect the helper command used for artifact manifest capture."""
+
+        return (
+            len(command) >= 4
+            and command[0] == "python"
+            and command[1] == "-c"
+            and "items.sort" in command[2]
+        )
 
 
 def backend_result(
@@ -94,7 +147,9 @@ def backend_result(
     error_type: str | None = None,
     error_message: str | None = None,
 ) -> BackendCommandResult:
-    now = datetime.now(timezone.utc)
+    """Build a timestamped backend result for fake backend queues."""
+
+    now = datetime.now(UTC)
     return BackendCommandResult(
         command=tuple(command),
         stdout=stdout,

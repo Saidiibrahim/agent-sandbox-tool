@@ -1,8 +1,18 @@
+"""Live Modal integration tests for the real backend implementation.
+
+These tests are opt-in because they require Modal credentials and validate the
+end-to-end lifecycle, artifact, and timeout behavior against the real service.
+"""
+
 from __future__ import annotations
 
 import os
 
 import pytest
+
+from agent_sandbox import ExecutionStatus, ModalSandboxConfig, SandboxSession
+
+pytest.importorskip("modal")
 
 pytestmark = [
     pytest.mark.integration,
@@ -11,10 +21,6 @@ pytestmark = [
         reason="Set MODAL_RUN_INTEGRATION=1 to enable Modal integration tests.",
     ),
 ]
-
-pytest.importorskip("modal")
-
-from agent_sandbox import ExecutionStatus, ModalSandboxConfig, SandboxSession
 
 
 @pytest.fixture()
@@ -37,6 +43,10 @@ Path('note.txt').write_text('hello from modal')
         )
         assert py_result.status is ExecutionStatus.SUCCEEDED
         assert py_result.value_repr == "'hello from modal'"
+        assert any(artifact.path == "note.txt" for artifact in py_result.artifacts)
+
+        preview = session.read_artifact_text("note.txt")
+        assert preview.preview == "hello from modal"
 
         shell_result = session.run_shell("cat note.txt")
         assert shell_result.status is ExecutionStatus.SUCCEEDED
