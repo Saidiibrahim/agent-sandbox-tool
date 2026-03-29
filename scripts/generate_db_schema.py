@@ -16,7 +16,13 @@ from agent_sandbox.execution.protocol import (  # noqa: E402
     PythonExecutionRequest,
     PythonExecutionResponse,
 )
-from agent_sandbox.models import ExecutionResult, SandboxHandle  # noqa: E402
+from agent_sandbox.models import (  # noqa: E402
+    ArtifactMetadata,
+    ArtifactPreview,
+    ExecutionResult,
+    SandboxHandle,
+    SessionInfo,
+)
 
 OUTPUT_PATH = ROOT / "docs" / "generated" / "db-schema.md"
 MODELS = [
@@ -25,6 +31,9 @@ MODELS = [
     ("Execution Protocol", PythonExecutionRequest),
     ("Execution Protocol", PythonExecutionResponse),
     ("Shared Models", SandboxHandle),
+    ("Shared Models", SessionInfo),
+    ("Shared Models", ArtifactMetadata),
+    ("Shared Models", ArtifactPreview),
     ("Shared Models", ExecutionResult),
 ]
 
@@ -98,7 +107,10 @@ def main() -> None:
     sections = [
         "# Generated Schema Reference",
         "",
-        "This repository does not define a relational database schema. This generated file documents the current typed schema sources that act as the authoritative machine-readable contract for config, protocol, and execution results.",
+        "This repository does not define a relational database schema. "
+        "This generated file documents the current typed schema sources "
+        "that act as the authoritative machine-readable contract for "
+        "config, protocol, and execution results.",
         "",
         "## Regeneration",
         "",

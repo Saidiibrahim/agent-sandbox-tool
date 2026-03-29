@@ -1,111 +1,82 @@
 # Testing Guide
 
-The test suite is designed to run fast without external dependencies by default, with opt-in integration tests for end-to-end validation against real Modal infrastructure.
+The test strategy is layered:
 
----
+- fast unit coverage without Modal by default
+- opt-in live Modal integration coverage
+- optional server route tests when the `[server]` deps are installed
 
-## Test Architecture
+## Test layout
 
-```
+```text
 tests/
-├── fakes.py                          # Test doubles (no Modal dependency)
-├── test_config.py                    # Config validation & security defaults
-├── test_python_runner.py             # Runner subprocess execution (local)
-├── test_session.py                   # Session lifecycle with FakeBackend
-├── test_tool.py                      # Tool payload serialization
-├── test_async_session.py             # Async session with FakeAsyncBackend
+├── fakes.py
+├── test_artifacts.py
+├── test_async_session.py
+├── test_cli.py
+├── test_config.py
+├── test_diagnostics.py
+├── test_manager.py
+├── test_python_runner.py
+├── test_server.py
+├── test_session.py
+├── test_state.py
+├── test_tool.py
 └── integration/
-    └── test_modal_backend.py         # E2E with real Modal (opt-in)
+    └── test_modal_backend.py
 ```
 
----
+## What belongs where
 
-## Test Doubles (fakes.py)
+- `fakes.py`
+  Deterministic backend doubles for sync and async session tests, including manifest capture and artifact file reads/downloads.
+- `test_config.py`
+  Config validation, security defaults, and timeout/resource guardrails.
+- `test_session.py` and `test_async_session.py`
+  Lifecycle mapping, structured execution results, and sync/async parity.
+- `test_artifacts.py`
+  Run IDs, sequence numbers, artifact preview/download, and path-safety checks.
+- `test_state.py`
+  Stored session/run persistence and list/read behavior.
+- `test_manager.py`
+  Cross-process reattach semantics and metadata preservation.
+- `test_cli.py`
+  JSON output and stable exit-code behavior.
+- `test_diagnostics.py`
+  Modal environment reporting without assuming the local machine is unconfigured.
+- `test_server.py`
+  Optional FastAPI route behavior, state-dir wiring, and exception-to-HTTP mapping. These tests skip if `fastapi`, `httpx`, or `pydantic-settings` are unavailable.
+- `integration/test_modal_backend.py`
+  Real Modal create/attach/exec/filesystem behavior with `MODAL_RUN_INTEGRATION=1`.
 
-The library uses fake backends instead of mocks for deterministic testing.
-
-### FakeBackend / FakeAsyncBackend
-
-Both implement the corresponding `SyncSandboxBackend` / `AsyncSandboxBackend` protocols:
-
-- Track `started` state and `commands` list
-- Accept a queue of pre-built `BackendCommandResult` objects
-- Pop results from the queue on each `run()` / `arun()` call
-
-### backend_result() factory
-
-Creates a `BackendCommandResult` with sensible defaults (exit_code=0, timed_out=False, timestamps=now), so tests only specify the fields they care about.
-
----
-
-## Running Tests
+## Common commands
 
 ```bash
-# All unit tests (no Modal credentials needed)
-pytest
+# Fast unit suite from a source checkout
+PYTHONPATH=src pytest -m "not integration"
 
-# With coverage
-pytest --cov=agent_sandbox --cov-report=term-missing
+# Focused slices
+PYTHONPATH=src pytest -q tests/test_artifacts.py tests/test_state.py tests/test_manager.py
+PYTHONPATH=src pytest -q tests/test_cli.py tests/test_diagnostics.py
 
-# Specific test file
-pytest tests/test_session.py
+# Full verification after installing the package
+pytest -m "not integration"
+./scripts/execplan/check.sh
+ruff check .
+ruff format --check .
+mypy src
+python -m build
 
-# Integration tests (requires Modal credentials)
-MODAL_RUN_INTEGRATION=1 pytest tests/integration/
+# Optional server route tests
+pytest -q tests/test_server.py
 
-# Full CI equivalent
-ruff check . && ruff format --check . && mypy src && pytest
+# Live Modal integration
+MODAL_RUN_INTEGRATION=1 pytest -m integration
 ```
 
----
+## Verification expectations
 
-## What Each Test File Covers
-
-### test_config.py
-- Security-by-default: `NetworkPolicy()` defaults to `BLOCKED`
-- `ALLOWLIST` mode requires non-empty `cidr_allowlist`
-- `BLOCKED` / `ALLOW_ALL` modes reject `cidr_allowlist`
-- Field validation (empty app_name, relative working_dir, etc.)
-
-### test_python_runner.py
-- Runs `PYTHON_RUNNER_BOOTSTRAP` as a local subprocess
-- Validates final expression extraction (`"2 + 2"` → `value_repr = "4"`)
-- Validates exception capture without crashing the runner
-- Validates stdout capture from `print()` calls
-
-### test_session.py
-- Lazy initialization (sandbox not created until first use)
-- Python result mapping from `BackendCommandResult` → `ExecutionResult`
-- Shell non-zero exit code handling
-- Session state transitions (close, detach, attach)
-
-### test_tool.py
-- `PythonSandboxTool.__call__()` returns JSON-serializable dict
-- Error handling: `AgentSandboxError` → structured error payload
-
-### test_async_session.py
-- Async session execution with `FakeAsyncBackend`
-- Mirrors sync session test coverage
-
-### integration/test_modal_backend.py
-- **Opt-in**: Requires `MODAL_RUN_INTEGRATION=1` environment variable
-- **Requires**: Valid Modal credentials configured
-- Tests:
-  - Python execution in a real sandbox
-  - File persistence across multiple `run_python()` calls in the same sandbox
-  - Shell command execution
-  - Timeout handling with real `ExecTimeoutError`
-
----
-
-## CI Pipeline (.github/workflows/ci.yml)
-
-The CI runs on every push and PR:
-
-1. **Matrix**: Python 3.11 and 3.12
-2. **Steps**:
-   - `ruff check .` — Linting
-   - `ruff format --check .` — Format verification
-   - `mypy src` — Strict type checking
-   - `pytest` — Unit tests with coverage
-3. **Integration tests**: Available via manual workflow dispatch with Modal credentials passed as secrets
+- Treat `PYTHONPATH=src pytest -m "not integration"` as the source-tree baseline.
+- When changing packaging, also run the installed-wheel or editable-install path so console scripts and optional extras are exercised.
+- Keep integration failures separate from unit regressions; lack of Modal credentials is a verification gap, not a code failure.
+- If the live Modal integration path fails, record the concrete failure in the active exec plan so the docs and state files stay honest.

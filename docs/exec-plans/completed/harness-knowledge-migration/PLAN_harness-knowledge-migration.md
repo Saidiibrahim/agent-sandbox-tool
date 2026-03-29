@@ -1,6 +1,6 @@
 # Migrate Repository Knowledge To Canonical Harness Layout
 
-This plan is a living document. Keep `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` current as work proceeds. Maintain this file in accordance with [docs/PLANS.md](../../PLANS.md).
+This plan is a living document. Keep `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` current as work proceeds. Maintain this file in accordance with [docs/PLANS.md](../../../PLANS.md).
 
 ## Purpose / Big Picture
 

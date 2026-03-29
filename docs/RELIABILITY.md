@@ -4,7 +4,7 @@ Reliability in this repository means predictable sandbox lifecycle behavior and 
 
 ## Reliability expectations
 
-- Session lifecycle transitions must stay explicit: created, started, detached, closed.
+- Session lifecycle transitions must stay explicit: created, active, detached, terminated.
 - Python execution must continue to use structured protocol parsing rather than ad hoc stdout parsing.
 - Timeout, detach, close, and reattach behavior should remain covered by deterministic tests.
 - Integration tests are the proof path for real Modal behavior, but unit tests must remain sufficient for day-to-day development.

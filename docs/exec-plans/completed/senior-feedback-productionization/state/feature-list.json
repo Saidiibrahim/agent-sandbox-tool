@@ -1,0 +1,79 @@
+{
+  "initiative": "senior-feedback-productionization",
+  "plan_file": "PLAN_senior-feedback-productionization.md",
+  "created_at": "2026-03-27T06:26:49Z",
+  "last_updated": "2026-03-29T04:24:06Z",
+  "editing_rules": [
+    "Use this file as the canonical implementation checklist for the initiative.",
+    "Work one feature at a time and only flip passes to true after evidence-backed verification.",
+    "Keep the plan, session state, and progress log synchronized with real repository state."
+  ],
+  "features": [
+    {
+      "id": "governance-baseline",
+      "category": "planning",
+      "description": "Bootstrap the initiative and repair governance blockers so exec-plan validation is usable during the implementation.",
+      "passes": true,
+      "steps": [
+        "Create the active initiative plan and JSON state trio under docs/exec-plans/active.",
+        "Repair the broken local markdown link reported by ./scripts/execplan/check.sh.",
+        "Refresh baseline evidence for PYTHONPATH=src pytest -m \"not integration\" and the exec-plan validator."
+      ]
+    },
+    {
+      "id": "core-runtime-contracts",
+      "category": "runtime",
+      "description": "Expand config, models, exceptions, backend protocols, and session lifecycle/artifact behavior to match the productionized contract.",
+      "passes": true,
+      "steps": [
+        "Add richer config fields, run/session/artifact models, and the broader exception hierarchy.",
+        "Extend backend/base.py and backend/modal_backend.py with resource controls and artifact file read/download support.",
+        "Upgrade sync and async sessions with lifecycle metadata, run sequencing, artifact capture, preview, and download semantics."
+      ]
+    },
+    {
+      "id": "persisted-state-manager",
+      "category": "runtime",
+      "description": "Add durable local JSON state and a thin manager layer for cross-process session reuse and run/artifact lookup.",
+      "passes": true,
+      "steps": [
+        "Add state.py with stored session/run persistence.",
+        "Add manager.py built on top of the session API.",
+        "Cover state and manager behavior with unit tests and keep attach/reattach semantics explicit."
+      ]
+    },
+    {
+      "id": "cli-and-diagnostics",
+      "category": "operator-surface",
+      "description": "Add a scriptable CLI and Modal environment diagnostics with stable JSON mode and predictable exit codes.",
+      "passes": true,
+      "steps": [
+        "Add diagnostics.py and environment-safe diagnostics tests.",
+        "Add cli.py for doctor/session/run/artifact flows plus serve wiring if the server ships.",
+        "Update packaging exports and tests without making the CLI environment-coupled."
+      ]
+    },
+    {
+      "id": "optional-http-service",
+      "category": "operator-surface",
+      "description": "Ship the optional FastAPI service only if it lands as a thin wrapper over manager/state with route tests and HTTP error mapping.",
+      "passes": true,
+      "steps": [
+        "Add the server package behind the server extra only after manager/state are in place.",
+        "Map domain exceptions to explicit HTTP responses instead of default 500s.",
+        "Add direct route tests and a local smoke path before documenting or exposing serve."
+      ]
+    },
+    {
+      "id": "docs-packaging-ci",
+      "category": "governance",
+      "description": "Update docs, schema references, packaging, and CI to reflect the broader operator surface while preserving repo governance checks.",
+      "passes": true,
+      "steps": [
+        "Update README, architecture/design/testing docs, and generated schema references.",
+        "Add project metadata, console script, optional extras, py.typed, build smoke checks, and wheel verification.",
+        "Merge CI changes so exec-plan validation remains alongside lint/type/test/package/CLI smoke coverage."
+      ]
+    }
+  ]
+}

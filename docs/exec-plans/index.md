@@ -8,10 +8,11 @@ Use this directory for durable task tracking.
 
 ## Active Initiatives
 
-There are currently no active initiatives in `docs/exec-plans/active/` beyond the README placeholder. Start new non-trivial work there using the template and JSON state trio.
+- None. See [active/README.md](./active/README.md).
 
 ## Completed Initiatives
 
+- [Senior feedback productionization](./completed/senior-feedback-productionization/PLAN_senior-feedback-productionization.md)
 - [Harness knowledge migration](./completed/harness-knowledge-migration/PLAN_harness-knowledge-migration.md)
 
 ## Workflow Rules

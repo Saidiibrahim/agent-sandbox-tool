@@ -6,13 +6,15 @@ Read this file with [docs/design-docs/index.md](./docs/design-docs/index.md), [d
 
 ## Top-Level Shape
 
-The codebase has three layers.
+The codebase has five layers.
 
 1. Public API: `src/agent_sandbox/session.py` and `src/agent_sandbox/tool.py`
-2. Execution protocol: `src/agent_sandbox/execution/`
-3. Modal backend boundary: `src/agent_sandbox/backend/`
+2. Process-friendly orchestration: `src/agent_sandbox/state.py` and `src/agent_sandbox/manager.py`
+3. Operator surfaces: `src/agent_sandbox/cli.py`, `src/agent_sandbox/diagnostics.py`, and optional `src/agent_sandbox/server/`
+4. Execution protocol: `src/agent_sandbox/execution/`
+5. Modal backend boundary: `src/agent_sandbox/backend/`
 
-The public layer should not leak Modal SDK details. The execution layer owns the JSON request/response protocol and bootstrap behavior for Python execution. The backend layer is the only place where Modal-specific sandbox lifecycle mechanics belong.
+The public layer should not leak Modal SDK details. The orchestration layer owns persisted session/run state for CLI or service reuse. The operator surfaces should stay thin wrappers over the library and manager. The execution layer owns the JSON request/response protocol and bootstrap behavior for Python execution. The backend layer is the only place where Modal-specific sandbox lifecycle mechanics belong.
 
 ## Layered Architecture
 
@@ -35,6 +37,13 @@ The public layer should not leak Modal SDK details. The execution layer owns the
 │  │  but preserve typed `ExecutionResult` access internally  │   │
 │  └──────────────────────────────────────────────────────────┘   │
 ├──────────────────────────────────────────────────────────────────┤
+│                ORCHESTRATION / OPERATOR LAYERS                   │
+│                                                                  │
+│  `state.py` stores local JSON session/run state.                 │
+│  `manager.py` re-attaches stored sandboxes for cross-process use.│
+│  `cli.py` and optional `server/` expose scriptable/operator      │
+│  surfaces without bypassing the library boundary.                │
+├──────────────────────────────────────────────────────────────────┤
 │                      EXECUTION LAYER                             │
 │                                                                  │
 │  `python_runner.py` injects the bootstrap script used inside     │
@@ -52,10 +61,15 @@ The public layer should not leak Modal SDK details. The execution layer owns the
 ## Package Orientation
 
 - `src/agent_sandbox/config.py`: typed configuration and network policy defaults
+- `src/agent_sandbox/diagnostics.py`: Modal environment validation for CLI/service startup
 - `src/agent_sandbox/models.py`: shared result and handle types
 - `src/agent_sandbox/exceptions.py`: stable exception hierarchy
 - `src/agent_sandbox/session.py`: canonical sync and async session APIs
+- `src/agent_sandbox/state.py`: local JSON-backed session/run persistence
+- `src/agent_sandbox/manager.py`: thin orchestration layer for CLI/service reuse
+- `src/agent_sandbox/cli.py`: scriptable developer/operator interface
 - `src/agent_sandbox/tool.py`: agent-facing wrappers around session methods
+- `src/agent_sandbox/server/`: optional FastAPI transport over the manager/state layer
 - `src/agent_sandbox/execution/protocol.py`: JSON-over-stdin/stdout schema
 - `src/agent_sandbox/execution/python_runner.py`: bootstrap script and response parsing
 - `src/agent_sandbox/backend/modal_backend.py`: only Modal-specific implementation surface
@@ -65,8 +79,10 @@ The public layer should not leak Modal SDK details. The execution layer owns the
 
 - `tool.py` may depend on `session.py`, shared models, and exceptions. It should not call Modal directly.
 - `session.py` may depend on shared models, config, and execution helpers. It should talk to a backend through the protocol defined in `backend/base.py`.
+- `state.py`, `manager.py`, `cli.py`, and `server/` may depend on the public session API and shared models. They should not call Modal directly.
 - `execution/` must stay backend-agnostic.
 - `backend/modal_backend.py` may depend on Modal, but Modal concerns should stop there.
+- Optional FastAPI dependencies must stay isolated to `src/agent_sandbox/server/`.
 - Security-sensitive defaults, especially network policy, belong in `config.py` and the security docs, not as ad hoc call-site overrides.
 
 ## Repository Layout
@@ -102,4 +118,5 @@ agent-sandbox-tool/
 - The default outbound network policy is blocked.
 - The Python execution path must return structured data, not brittle text parsing.
 - The library supports both sync and async consumers without changing semantics.
+- Cross-process reuse is modeled through stored `session_id`/`sandbox_id` state, not a mandatory daemon.
 - Fake backends are preferred for deterministic tests; live Modal coverage remains opt-in.
